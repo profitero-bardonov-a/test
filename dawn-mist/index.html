@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dawn Mist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0e1a1c;
+      --mist: #d7ece6;
+      --amber: #e8b86d;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a1416;
+      color: var(--mist);
+      font-family: Fraunces, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .veil {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-content: end start;
+      padding: clamp(1.5rem, 5vw, 3.5rem);
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(8, 18, 20, 0.05) 0%, rgba(8, 18, 20, 0.0) 35%, rgba(8, 18, 20, 0.45) 100%);
+    }
+
+    .copy {
+      max-width: 22rem;
+      animation: rise 1.4s ease-out both;
+    }
+
+    h1 {
+      font-size: clamp(2.6rem, 7vw, 4.6rem);
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 0.95;
+      color: var(--mist);
+      text-shadow: 0 0.4rem 2rem rgba(8, 20, 22, 0.45);
+    }
+
+    p {
+      margin-top: 0.85rem;
+      font-size: clamp(0.95rem, 2.1vw, 1.15rem);
+      font-weight: 500;
+      line-height: 1.45;
+      color: color-mix(in srgb, var(--mist) 78%, var(--amber));
+      opacity: 0.92;
+      animation: rise 1.6s ease-out 0.15s both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(0.8rem); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    noscript {
+      position: fixed;
+      inset: auto 1rem 1rem;
+      color: var(--mist);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c" aria-hidden="true"></canvas>
+  <div class="veil">
+    <div class="copy">
+      <h1>Dawn Mist</h1>
+      <p>Soft teal air over warm amber light — a quiet horizon before the day begins.</p>
+    </div>
+  </div>
+  <noscript>Enable JavaScript to view the Dawn Mist shader.</noscript>
+  <script>
+    (function () {
+      const canvas = document.getElementById("c");
+      const gl = canvas.getContext("webgl", { antialias: false, alpha: false });
+      if (!gl) {
+        document.querySelector(".copy p").textContent =
+          "WebGL is unavailable in this browser — mist stays imagined.";
+        return;
+      }
+
+      const vsSource = `
+        attribute vec2 a_pos;
+        void main() {
+          gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+      `;
+
+      const fsSource = `
+        precision highp float;
+        uniform vec2 u_res;
+        uniform float u_time;
+
+        float hash(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          float a = hash(i);
+          float b = hash(i + vec2(1.0, 0.0));
+          float c = hash(i + vec2(0.0, 1.0));
+          float d = hash(i + vec2(1.0, 1.0));
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+        }
+
+        float fbm(vec2 p) {
+          float v = 0.0;
+          float a = 0.5;
+          for (int i = 0; i < 5; i++) {
+            v += a * noise(p);
+            p = p * 2.08 + vec2(1.7, 9.2);
+            a *= 0.55;
+          }
+          return v;
+        }
+
+        void main() {
+          vec2 uv = gl_FragCoord.xy / u_res;
+          float aspect = u_res.x / max(u_res.y, 1.0);
+          vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
+          float t = u_time * 0.04;
+
+          // Soft horizon band
+          float horizon = smoothstep(0.05, 0.55, uv.y);
+          float glow = exp(-pow((uv.y - 0.28) * 3.2, 2.0));
+
+          // Drifting mist layers
+          float mist1 = fbm(p * 2.2 + vec2(t * 0.6, t * 0.25));
+          float mist2 = fbm(p * 3.4 - vec2(t * 0.35, -t * 0.5));
+          float mist = mix(mist1, mist2, 0.45);
+          mist = smoothstep(0.25, 0.85, mist);
+
+          vec3 deep = vec3(0.04, 0.09, 0.10);
+          vec3 teal = vec3(0.18, 0.42, 0.44);
+          vec3 foam = vec3(0.72, 0.88, 0.84);
+          vec3 amber = vec3(0.91, 0.68, 0.36);
+          vec3 rose = vec3(0.78, 0.48, 0.34);
+
+          vec3 sky = mix(deep, teal, horizon);
+          sky = mix(sky, foam, mist * 0.55 * (0.35 + 0.65 * uv.y));
+          sky += amber * glow * 0.55;
+          sky = mix(sky, rose, glow * 0.18 * (1.0 - uv.y));
+
+          // Gentle vignette + breath
+          float vig = smoothstep(1.15, 0.25, length(p * vec2(0.85, 1.0)));
+          float breath = 0.015 * sin(u_time * 0.35);
+          sky *= vig + breath;
+
+          gl_FragColor = vec4(sky, 1.0);
+        }
+      `;
+
+      function compile(type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          throw new Error(gl.getShaderInfoLog(shader) || "shader compile failed");
+        }
+        return shader;
+      }
+
+      const program = gl.createProgram();
+      gl.attachShader(program, compile(gl.VERTEX_SHADER, vsSource));
+      gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fsSource));
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(program) || "program link failed");
+      }
+      gl.useProgram(program);
+
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+        gl.STATIC_DRAW
+      );
+      const aPos = gl.getAttribLocation(program, "a_pos");
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+      const uRes = gl.getUniformLocation(program, "u_res");
+      const uTime = gl.getUniformLocation(program, "u_time");
+      const start = performance.now();
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.floor(window.innerWidth * dpr);
+        const h = Math.floor(window.innerHeight * dpr);
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          gl.viewport(0, 0, w, h);
+        }
+      }
+
+      function frame(now) {
+        resize();
+        gl.uniform2f(uRes, canvas.width, canvas.height);
+        gl.uniform1f(uTime, (now - start) * 0.001);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
